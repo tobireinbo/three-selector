@@ -1,56 +1,68 @@
 import * as THREE from "three";
-import {
-  BoxGeometry,
-  Camera,
-  Mesh,
-  MeshNormalMaterial,
-  Renderer,
-  Scene,
-  WebGLRenderer,
-} from "three";
+import { Object3D, PerspectiveCamera, Scene, WebGLRenderer } from "three";
 
-let camera: Camera, scene: Scene, renderer: WebGLRenderer;
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls";
+import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader";
+import { RGBELoader } from "three/examples/jsm/loaders/RGBELoader.js";
+import { RoughnessMipmapper } from "three/examples/jsm/utils/RoughnessMipmapper.js";
+
+let camera: PerspectiveCamera, scene: Scene, renderer: WebGLRenderer;
 
 init();
+render();
 
 function init() {
+  const container = document.createElement("div");
+  document.body.appendChild(container);
+
   camera = new THREE.PerspectiveCamera(
-    70,
+    45,
     window.innerWidth / window.innerHeight,
-    0.01,
-    10
+    0.25,
+    20
   );
-  camera.position.z = 1;
+  camera.position.set(-1.8, 0.6, 2.7);
 
   scene = new THREE.Scene();
+  const loader = new GLTFLoader().setPath("assets/pc/source/");
+  loader.load("computer.glb", function (gltf) {
+    scene.add(gltf.scene);
 
-  let geometry1 = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-  let geometry2 = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-  let geometry3 = new THREE.BoxGeometry(0.2, 0.2, 0.2);
-  const material = new THREE.MeshNormalMaterial();
-
-  let mesh1 = new THREE.Mesh(geometry1, material);
-  let mesh2 = new THREE.Mesh(geometry2, material);
-  let mesh3 = new THREE.Mesh(geometry3, material);
-
-  scene.add(mesh1);
-  scene.add(mesh2);
-  scene.add(mesh3);
-
-  renderer = new THREE.WebGLRenderer({ antialias: true });
-  renderer.setSize(window.innerWidth, window.innerHeight);
-  renderer.setAnimationLoop((time) => {
-    animation(time, mesh1);
-    animation(time, mesh2);
-    animation(time, mesh3);
+    render();
   });
 
-  document.body.appendChild(renderer.domElement);
+  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setPixelRatio(window.devicePixelRatio);
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1;
+  renderer.outputEncoding = THREE.sRGBEncoding;
+  container.appendChild(renderer.domElement);
+
+  const pmremGenerator = new THREE.PMREMGenerator(renderer);
+  pmremGenerator.compileEquirectangularShader();
+
+  const controls = new OrbitControls(camera, renderer.domElement);
+  controls.addEventListener("change", render); // use if there is no animation loop
+  controls.minDistance = 2;
+  controls.maxDistance = 10;
+  controls.target.set(0, 0, -0.2);
+  controls.update();
+
+  window.addEventListener("resize", onWindowResize);
 }
 
-function animation(time: number, mesh: Mesh) {
-  //mesh.rotation.x = time / 2000;
-  mesh.rotation.y = time / 1000;
+function onWindowResize() {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
 
+  renderer.setSize(window.innerWidth, window.innerHeight);
+
+  render();
+}
+
+//
+
+function render() {
   renderer.render(scene, camera);
 }
