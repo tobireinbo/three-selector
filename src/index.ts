@@ -55,7 +55,7 @@ function init() {
    *
    */
   scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xaaaaaa, 0.2));
+  scene.add(new THREE.AmbientLight(0xaaaaaa, 0.5));
   scene.fog = new THREE.Fog("#000000", 2, 4);
 
   /*
@@ -65,7 +65,6 @@ function init() {
    */
   const loader = new GLTFLoader().setPath("assets/pc/source/");
   loader.load("computer.glb", function (gltf) {
-    console.log(gltf);
     scene.add(gltf.scene);
     model1 = {
       object: gltf.scene,
@@ -219,7 +218,6 @@ function onClick(event: MouseEvent) {
 
       intersectedObject = object.parent;
       model1.spin = false;
-      console.log(outlinePass);
       outlinePass.selectedObjects = [intersectedObject];
     }
   } else {
@@ -247,6 +245,9 @@ function animate() {
   requestAnimationFrame(animate);
   const timer = performance.now();
   if (model1.spin) {
+    if (model1.object.rotation.y >= 2 * Math.PI) {
+      model1.object.rotation.y = 0;
+    }
     model1.object.rotation.y += 0.005;
   }
   TWEEN.update(timer);
