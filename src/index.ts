@@ -28,7 +28,9 @@ let camera: PerspectiveCamera,
   effectFXAA: ShaderPass;
 let mouse: Vector2, raycaster: Raycaster;
 let intersectedObject: Object3D;
-let model1: { object: Object3D; spin: boolean; tween: void };
+let models: Array<Model> = [];
+type Model = { object: Object3D; spin: boolean; tween: void };
+
 init();
 animate();
 
@@ -63,14 +65,13 @@ function init() {
    * load glb model
    *
    */
-  const loader = new GLTFLoader().setPath("assets/pc/source/");
-  loader.load("computer.glb", function (gltf) {
-    scene.add(gltf.scene);
-    model1 = {
-      object: gltf.scene,
-      spin: true,
-      tween: undefined,
-    };
+  const loader = new GLTFLoader().setPath("assets/");
+
+  ["pc/source/computer.glb"].forEach((path: string) => {
+    loader.load(path, function (gltf) {
+      scene.add(gltf.scene);
+      models.push({ object: gltf.scene, spin: true, tween: undefined });
+    });
   });
 
   /*
@@ -139,7 +140,7 @@ function init() {
     1 / window.innerWidth,
     1 / window.innerHeight
   );
-  composer.addPass(effectFXAA);
+  //composer.addPass(effectFXAA);
 
   /*
    *
@@ -155,7 +156,7 @@ function init() {
     scatter: 0,
     blending: 1,
     blendingMode: 1,
-    greyscale: true,
+    greyscale: false,
     disable: false,
   };
   const halftonePass = new HalftonePass(
@@ -163,7 +164,7 @@ function init() {
     window.innerHeight,
     params
   );
-  //composer.addPass(halftonePass);
+  composer.addPass(halftonePass);
 
   /*
    *
@@ -204,36 +205,47 @@ function onClick(event: MouseEvent) {
     if (!intersectedObject) {
       console.log("in");
 
-      model1.tween = new TWEEN.Tween({
-        posZ: model1.object.position.z,
-        rotY: model1.object.rotation.y,
-      })
-        .to({ posZ: 0.5, rotY: 0 }, 500)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .onUpdate(function (obj: { posZ: number; rotY: number }) {
-          model1.object.position.z = obj.posZ;
-          model1.object.rotation.y = obj.rotY;
+      console.log(models);
+      const currentModel = models.find((m) => m.object.id === object.parent.id);
+
+      if (currentModel) {
+        currentModel.tween = new TWEEN.Tween({
+          posZ: currentModel.object.position.z,
+          rotY: currentModel.object.rotation.y,
         })
-        .start();
+          .to({ posZ: 0.5, rotY: 0 }, 500)
+          .easing(TWEEN.Easing.Quadratic.InOut)
+          .onUpdate(function (obj: { posZ: number; rotY: number }) {
+            currentModel.object.position.z = obj.posZ;
+            currentModel.object.rotation.y = obj.rotY;
+          })
+          .start();
+      }
 
       intersectedObject = object.parent;
-      model1.spin = false;
+      currentModel.spin = false;
       outlinePass.selectedObjects = [intersectedObject];
     }
   } else {
     if (intersectedObject) {
       console.log("out");
 
-      model1.tween = new TWEEN.Tween(model1.object.position)
-        .to({ z: 0 }, 500)
-        .easing(TWEEN.Easing.Quadratic.InOut)
-        .onUpdate(function (pos: { x: number; y: number; z: number }) {
-          model1.object.position.z = pos.z;
-        })
-        .start();
+      const currentModel = models.find(
+        (m) => m.object.id === intersectedObject.id
+      );
 
+      if (currentModel) {
+        currentModel.tween = new TWEEN.Tween(currentModel.object.position)
+          .to({ z: 0 }, 500)
+          .easing(TWEEN.Easing.Quadratic.InOut)
+          .onUpdate(function (pos: { x: number; y: number; z: number }) {
+            currentModel.object.position.z = pos.z;
+          })
+          .start();
+        currentModel.spin = true;
+      }
       intersectedObject = undefined;
-      model1.spin = true;
+
       outlinePass.selectedObjects = [];
     }
   }
@@ -244,12 +256,15 @@ function onClick(event: MouseEvent) {
 function animate() {
   requestAnimationFrame(animate);
   const timer = performance.now();
-  if (model1.spin) {
-    if (model1.object.rotation.y >= 2 * Math.PI) {
-      model1.object.rotation.y = 0;
+  models.forEach((model: Model) => {
+    if (model.spin) {
+      if (model.object.rotation.y >= 2 * Math.PI) {
+        model.object.rotation.y = 0;
+      }
+      model.object.rotation.y += 0.005;
     }
-    model1.object.rotation.y += 0.005;
-  }
+  });
+
   TWEEN.update(timer);
   composer.render();
 }
