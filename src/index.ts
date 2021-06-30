@@ -6,6 +6,7 @@ import {
   Raycaster,
   Scene,
   Vector2,
+  Vector3,
   WebGLRenderer,
 } from "three";
 
@@ -29,7 +30,13 @@ let camera: PerspectiveCamera,
 let mouse: Vector2, raycaster: Raycaster;
 let intersectedObject: Object3D;
 let models: Array<Model> = [];
-type Model = { object: Object3D; spin: boolean; tween: void };
+type Model = {
+  object: Object3D;
+  spin: boolean;
+  tween: void;
+  idleRotation: number;
+  idlePosition: { x: number; y: number; z: number };
+};
 
 init();
 animate();
@@ -57,7 +64,7 @@ function init() {
    *
    */
   scene = new THREE.Scene();
-  scene.add(new THREE.AmbientLight(0xaaaaaa, 0.5));
+  scene.add(new THREE.AmbientLight(0xaaaaaa, 3));
   scene.fog = new THREE.Fog("#000000", 2, 4);
 
   /*
@@ -65,14 +72,61 @@ function init() {
    * load glb model
    *
    */
-  const loader = new GLTFLoader().setPath("assets/");
 
-  ["pc/source/computer.glb"].forEach((path: string) => {
-    loader.load(path, function (gltf) {
-      scene.add(gltf.scene);
-      models.push({ object: gltf.scene, spin: true, tween: undefined });
-    });
-  });
+  [
+    {
+      dir: "assets/personal_computer/",
+      file: "scene.gltf",
+      scale: 0.2,
+      rotation: 0,
+      offset: {
+        x: 0,
+        y: -2.5,
+        z: 2,
+      },
+    },
+    {
+      dir: "assets/1982_sony_betacam/",
+      file: "scene.gltf",
+      scale: 0.05,
+      rotation: Math.PI / 2,
+      offset: {
+        x: 0,
+        y: 0,
+        z: 0,
+      },
+    },
+  ].forEach(
+    (
+      path: {
+        dir: string;
+        file: string;
+        scale: number;
+        rotation: number;
+        offset: { x: number; y: number; z: number };
+      },
+      index: number
+    ) => {
+      const loader = new GLTFLoader().setPath(path.dir);
+      loader.load(path.file, function (gltf) {
+        gltf.scene.scale.set(path.scale, path.scale, path.scale);
+        gltf.scene.position.set(
+          path.offset.x + index * 1.5,
+          path.offset.y,
+          path.offset.z
+        );
+        gltf.scene.rotation.y += path.rotation;
+        scene.add(gltf.scene);
+        models.push({
+          object: gltf.scene,
+          spin: true,
+          tween: undefined,
+          idleRotation: path.rotation,
+          idlePosition: path.offset,
+        });
+      });
+    }
+  );
 
   /*
    *
@@ -140,7 +194,7 @@ function init() {
     1 / window.innerWidth,
     1 / window.innerHeight
   );
-  //composer.addPass(effectFXAA);
+  composer.addPass(effectFXAA);
 
   /*
    *
@@ -164,7 +218,7 @@ function init() {
     window.innerHeight,
     params
   );
-  composer.addPass(halftonePass);
+  //composer.addPass(halftonePass);
 
   /*
    *
@@ -203,40 +257,60 @@ function onClick(event: MouseEvent) {
   if (intersects.length > 0) {
     var object: Object3D = intersects[0].object;
     if (!intersectedObject) {
-      console.log("in");
+      let foundObject: Object3D = null;
+      models.forEach((m) => {
+        const upper = getParentById(object, m.object.uuid);
+        if (upper) {
+          foundObject = upper;
+        }
+      });
 
-      console.log(models);
-      const currentModel = models.find((m) => m.object.id === object.parent.id);
+      const currentModel = models.find(
+        (m) => m.object.uuid === foundObject.uuid
+      );
 
       if (currentModel) {
         currentModel.tween = new TWEEN.Tween({
           posZ: currentModel.object.position.z,
           rotY: currentModel.object.rotation.y,
         })
-          .to({ posZ: 0.5, rotY: 0 }, 500)
+          .to(
+            {
+              posZ: currentModel.idlePosition.z + 0.5,
+              rotY: currentModel.idleRotation,
+            },
+            500
+          )
           .easing(TWEEN.Easing.Quadratic.InOut)
           .onUpdate(function (obj: { posZ: number; rotY: number }) {
             currentModel.object.position.z = obj.posZ;
             currentModel.object.rotation.y = obj.rotY;
           })
           .start();
+        currentModel.spin = false;
       }
 
       intersectedObject = object.parent;
-      currentModel.spin = false;
+
       outlinePass.selectedObjects = [intersectedObject];
     }
   } else {
     if (intersectedObject) {
-      console.log("out");
+      let foundObject: Object3D = null;
+      models.forEach((m) => {
+        const upper = getParentById(intersectedObject, m.object.uuid);
+        if (upper) {
+          foundObject = upper;
+        }
+      });
 
       const currentModel = models.find(
-        (m) => m.object.id === intersectedObject.id
+        (m) => m.object.uuid === foundObject.uuid
       );
 
       if (currentModel) {
         currentModel.tween = new TWEEN.Tween(currentModel.object.position)
-          .to({ z: 0 }, 500)
+          .to({ z: currentModel.idlePosition.z }, 500)
           .easing(TWEEN.Easing.Quadratic.InOut)
           .onUpdate(function (pos: { x: number; y: number; z: number }) {
             currentModel.object.position.z = pos.z;
@@ -267,4 +341,16 @@ function animate() {
 
   TWEEN.update(timer);
   composer.render();
+}
+
+function getParentById(object: Object3D, id: string): any {
+  if (object.uuid !== id) {
+    if (object.parent) {
+      return getParentById(object.parent, id);
+    } else {
+      return null;
+    }
+  } else {
+    return object;
+  }
 }
