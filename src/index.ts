@@ -1,5 +1,6 @@
 import * as THREE from "three";
 import {
+  Color,
   Euler,
   Object3D,
   PerspectiveCamera,
@@ -64,8 +65,21 @@ function init() {
    *
    */
   scene = new THREE.Scene();
+  const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 4);
+  hemiLight.position.set(0, 20, 0);
+  scene.add(hemiLight);
   scene.add(new THREE.AmbientLight(0xaaaaaa, 3));
-  scene.fog = new THREE.Fog("#000000", 2, 4);
+  scene.background = new Color("#000000");
+  scene.fog = new THREE.FogExp2("#000000", 0.5);
+
+  const mesh = new THREE.Mesh(
+    new THREE.PlaneGeometry(100, 100),
+    new THREE.MeshPhongMaterial({ color: 0x030303, depthWrite: false })
+  );
+  mesh.rotation.x = -Math.PI / 2;
+  mesh.receiveShadow = true;
+  mesh.uuid = "ground";
+  scene.add(mesh);
 
   /*
    *
@@ -77,12 +91,12 @@ function init() {
     {
       dir: "assets/personal_computer/",
       file: "scene.gltf",
-      scale: 0.2,
-      rotation: 0,
+      scale: 0.25,
+      rotation: -Math.PI / 2,
       offset: {
-        x: 0,
-        y: -2.5,
-        z: 2,
+        x: -1,
+        y: -3,
+        z: 1.5,
       },
     },
     {
@@ -92,8 +106,8 @@ function init() {
       rotation: Math.PI / 2,
       offset: {
         x: 0,
-        y: 0,
-        z: 0,
+        y: 1,
+        z: 1,
       },
     },
   ].forEach(
@@ -110,12 +124,9 @@ function init() {
       const loader = new GLTFLoader().setPath(path.dir);
       loader.load(path.file, function (gltf) {
         gltf.scene.scale.set(path.scale, path.scale, path.scale);
-        gltf.scene.position.set(
-          path.offset.x + index * 1.5,
-          path.offset.y,
-          path.offset.z
-        );
+        gltf.scene.position.set(path.offset.x, path.offset.y, path.offset.z);
         gltf.scene.rotation.y += path.rotation;
+        gltf.scene.castShadow = true;
         scene.add(gltf.scene);
         models.push({
           object: gltf.scene,
@@ -218,7 +229,7 @@ function init() {
     window.innerHeight,
     params
   );
-  //composer.addPass(halftonePass);
+  composer.addPass(halftonePass);
 
   /*
    *
@@ -253,9 +264,10 @@ function onClick(event: MouseEvent) {
   raycaster.setFromCamera(mouse, camera);
 
   var intersects = raycaster.intersectObject(scene, true);
+  var intersectsNoGround = intersects.filter((i) => i.object.uuid !== "ground");
 
-  if (intersects.length > 0) {
-    var object: Object3D = intersects[0].object;
+  if (intersectsNoGround.length > 0) {
+    var object: Object3D = intersectsNoGround[0].object;
     if (!intersectedObject) {
       let foundObject: Object3D = null;
       models.forEach((m) => {
