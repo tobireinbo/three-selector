@@ -19,6 +19,7 @@ import { OutlinePass } from "three/examples/jsm/postprocessing/OutlinePass";
 import { ShaderPass } from "three/examples/jsm/postprocessing/ShaderPass";
 import { FXAAShader } from "three/examples/jsm/shaders/FXAAShader";
 import { HalftonePass } from "three/examples/jsm/postprocessing/HalftonePass";
+import { PixelShader } from "three/examples/jsm/shaders/PixelShader";
 
 const TWEEN = require("@tweenjs/tween.js");
 let camera: PerspectiveCamera,
@@ -27,7 +28,8 @@ let camera: PerspectiveCamera,
   controls: OrbitControls,
   composer: EffectComposer,
   outlinePass: OutlinePass,
-  effectFXAA: ShaderPass;
+  effectFXAA: ShaderPass,
+  pixelPass: ShaderPass;
 let mouse: Vector2, raycaster: Raycaster;
 let intersectedObject: Object3D;
 let models: Array<Model> = [];
@@ -39,25 +41,24 @@ type Model = {
   idlePosition: { x: number; y: number; z: number };
 };
 
+const container = document.getElementById("three");
 init();
 animate();
 
 function init() {
-  const container = document.createElement("div");
-  document.body.appendChild(container);
-
+  console.log(container);
   /*
    *
    * camera
    *
    */
   camera = new THREE.PerspectiveCamera(
-    90,
-    window.innerWidth / window.innerHeight,
+    50,
+    container.clientWidth / container.clientHeight,
     0.25,
     20
   );
-  camera.position.set(0, 0.6, 2.7);
+  camera.position.set(0, 1, 3.5);
 
   /*
    *
@@ -67,19 +68,11 @@ function init() {
   scene = new THREE.Scene();
   const hemiLight = new THREE.HemisphereLight(0xffffff, 0x444444, 4);
   hemiLight.position.set(0, 20, 0);
-  scene.add(hemiLight);
-  scene.add(new THREE.AmbientLight(0xaaaaaa, 3));
-  scene.background = new Color("#000000");
-  scene.fog = new THREE.FogExp2("#000000", 0.5);
+  scene.add(new THREE.AmbientLight(0xaaaaaa, 2));
 
-  const mesh = new THREE.Mesh(
-    new THREE.PlaneGeometry(100, 100),
-    new THREE.MeshPhongMaterial({ color: 0x030303, depthWrite: false })
-  );
-  mesh.rotation.x = -Math.PI / 2;
-  mesh.receiveShadow = true;
-  mesh.uuid = "ground";
-  scene.add(mesh);
+  const spotLight = new THREE.SpotLight(0xffffff, 5, 20, 2);
+  spotLight.position.y = 10;
+  scene.add(spotLight);
 
   /*
    *
@@ -89,14 +82,14 @@ function init() {
 
   [
     {
-      dir: "assets/personal_computer/",
-      file: "scene.gltf",
-      scale: 0.25,
-      rotation: -Math.PI / 2,
+      dir: "assets/pc/source/",
+      file: "computer.glb",
+      scale: 0.8,
+      rotation: 0,
       offset: {
-        x: -1,
-        y: -3,
-        z: 1.5,
+        x: -1.5,
+        y: 0.5,
+        z: 0,
       },
     },
     {
@@ -105,7 +98,7 @@ function init() {
       scale: 0.05,
       rotation: Math.PI / 2,
       offset: {
-        x: 0,
+        x: 1,
         y: 1,
         z: 1,
       },
@@ -152,21 +145,21 @@ function init() {
    * renderer
    *
    */
-  renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
   renderer.setPixelRatio(window.devicePixelRatio);
-  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setSize(container.clientWidth, container.clientHeight);
   renderer.toneMapping = THREE.ACESFilmicToneMapping;
   renderer.toneMappingExposure = 1;
   renderer.outputEncoding = THREE.sRGBEncoding;
   container.appendChild(renderer.domElement);
 
-  /*controls = new OrbitControls(camera, renderer.domElement);
-  controls.minDistance = 2;
-  controls.maxDistance = 10;
-  controls.target.set(0, 0.5, -0.2);
-  controls.update();
-*/
-
+  if (false) {
+    controls = new OrbitControls(camera, renderer.domElement);
+    controls.minDistance = 2;
+    controls.maxDistance = 10;
+    controls.target.set(0, 0.5, -0.2);
+    controls.update();
+  }
   /*
    *
    * render pass
@@ -182,7 +175,7 @@ function init() {
    *
    */
   outlinePass = new OutlinePass(
-    new THREE.Vector2(window.innerWidth, window.innerHeight),
+    new THREE.Vector2(container.clientWidth, container.clientHeight),
     scene,
     camera
   );
@@ -202,8 +195,8 @@ function init() {
    */
   effectFXAA = new ShaderPass(FXAAShader);
   effectFXAA.uniforms["resolution"].value.set(
-    1 / window.innerWidth,
-    1 / window.innerHeight
+    1 / container.clientWidth,
+    1 / container.clientHeight
   );
   composer.addPass(effectFXAA);
 
@@ -222,14 +215,25 @@ function init() {
     blending: 1,
     blendingMode: 1,
     greyscale: false,
-    disable: false,
+    disable: true,
   };
   const halftonePass = new HalftonePass(
-    window.innerWidth,
-    window.innerHeight,
+    container.clientWidth,
+    container.clientHeight,
     params
   );
   composer.addPass(halftonePass);
+
+  pixelPass = new ShaderPass(PixelShader);
+  pixelPass.uniforms["resolution"].value = new THREE.Vector2(
+    container.clientWidth,
+    container.clientHeight
+  );
+  pixelPass.uniforms["resolution"].value.multiplyScalar(
+    window.devicePixelRatio
+  );
+  pixelPass.uniforms["pixelSize"].value = 4;
+  composer.addPass(pixelPass);
 
   /*
    *
@@ -241,8 +245,8 @@ function init() {
 }
 
 function onWindowResize() {
-  const width = window.innerWidth;
-  const height = window.innerHeight;
+  const width = container.clientWidth;
+  const height = container.clientHeight;
   camera.aspect = width / height;
   camera.updateProjectionMatrix();
 
@@ -250,16 +254,19 @@ function onWindowResize() {
   composer.setSize(width, height);
 
   effectFXAA.uniforms["resolution"].value.set(
-    1 / window.innerWidth,
-    1 / window.innerHeight
+    1 / container.clientWidth,
+    1 / container.clientHeight
   );
+  pixelPass.uniforms["resolution"].value
+    .set(container.clientWidth, container.clientHeight)
+    .multiplyScalar(window.devicePixelRatio);
 }
 
 function onClick(event: MouseEvent) {
   event.preventDefault();
 
-  mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
-  mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+  mouse.x = (event.clientX / container.clientWidth) * 2 - 1;
+  mouse.y = -(event.clientY / container.clientHeight) * 2 + 1;
 
   raycaster.setFromCamera(mouse, camera);
 
@@ -288,7 +295,8 @@ function onClick(event: MouseEvent) {
         })
           .to(
             {
-              posZ: currentModel.idlePosition.z + 0.5,
+              posZ:
+                currentModel.idlePosition.z + currentModel.idlePosition.z * 0.2,
               rotY: currentModel.idleRotation,
             },
             500
